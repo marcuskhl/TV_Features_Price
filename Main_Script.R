@@ -11,7 +11,7 @@ names(price_db) <- gsub(" (LAN / RJ-45)","", names(price_db), fixed = T)
 x <- sapply(price_db, class)
 for(i in 1:length(x)){
   if(x[i]=="integer" | x[i]=="numeric" ){
-    price_db[,i] <- f2n(price_db[,i])
+    price_db[,i] <- f2n(price_db[,i]) #somehow using apply is even slower on this line
   }else{
     price_db[,i] <- f2c(price_db[,i])
   }
@@ -42,7 +42,7 @@ size_cat_gen <- function(df, range){
     upper[floor(col/range)*range==ceiling(col/range)*range] <- upper[floor(col/range)*range==ceiling(col/range)*range] +range
     new_col <- paste0(lower, "\"-", upper,  "\"")
     new_col <- as.df(new_col)
-    names(new_col) <- if(range == 5){"Size Group (5-inch)"}else("Size Group (10-inch)")
+    names(new_col) <- paste0("Size Group (", range, "-inch)")
     return(cbind.data.frame(df, new_col))
   }
 }
