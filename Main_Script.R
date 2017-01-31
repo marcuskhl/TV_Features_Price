@@ -25,10 +25,35 @@ price_db <- column.rm(price_db, "Power Consumption (Watts)") # aint nobody got t
 price_db$Country <- toupper(price_db$Country)
 price_db$Brand <- toupper(price_db$Brand)
 
+blank_reducer <- function(col){
+  col <- gsub("  "," ", col)
+  col <- gsub("  "," ", col)
+  col <- gsub(" ","", col)
+}
+blank_remover <- function(col){col[col==""| col==" "] <- NA}
+foreach (i = 1:dim(price_db)[2]) %dopar%{
+  price_db[,i] <- blank_reducer(price_db[,i])
+  price_db[,i] <- blank_remover(price_db[,i])
+}
+
+# Brightness ---------------------------------------------------------
+price_db$Brightness[price_db$Brightness>=1000] <- NA
+price_db$Brightness[price_db$Brightness==""| price_db$Brightness==" "] <- NA
+
+# Aspect Ratio ---------------------------------------------------------
+price_db$`Aspect Ratio`[price_db$`Aspect Ratio`==""| price_db$`Aspect Ratio`==" "] <- NA
+
+# Refresh Rate ---------------------------------------------------------
 price_db$`Refresh Rate` <- gsub("H", "", price_db$`Refresh Rate`, ignore.case = T)
 price_db$`Refresh Rate` <- gsub("z", "", price_db$`Refresh Rate`, ignore.case = T)
 price_db$`Refresh Rate` <- gsub(" ", "", price_db$`Refresh Rate`, fixed = T)
-price_db$`Refresh Rate` <- paste0(price_db$`Refresh Rate`, "Hz")
+price_db$`Refresh Rate`[price_db$`Refresh Rate`==""|price_db$`Refresh Rate`==" "] <- NA 
+price_db$`Refresh Rate` <- f2n(price_db$`Refresh Rate`)
+price_db$`Refresh Rate`[price_db$`Refresh Rate`>250] <- NA # rm some ridiculous refresh rates
+price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)] <- paste0(price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)], "Hz")
+
+# Display Format ---------------------------------------------------------
+price_db$`Aspect Ratio`[price_db$`Aspect Ratio`==""| price_db$`Aspect Ratio`==" "] <- NA
 
 # Actual Cleaning
 # price_db$`Size Group (5-inch)` <- dt.double_quote_fix(price_db$`Size Group (5-inch)`)
@@ -50,7 +75,6 @@ price_db <- size_cat_gen(price_db,5)
 
 
 
-
 # Unique Value Visualisation
 x <- sapply(price_db, unique)
 n <- max(sapply(x, length))
@@ -66,8 +90,6 @@ names(unique_df) <- names(price_db)
 
 
 
-
-
 #~~~Data Cleaning End~~~#
 
 price_db_2016 <- price_db[price_db$Year==2016, ]
@@ -77,4 +99,4 @@ price_db_2016 <- price_db_2016[, list(Price_US = mean(Price_US), Price_Loc = mea
                                                                                                        "Display Format", "Number of HDMI Connectors", "CI+ module",
                                                                                                        "Backlight", "Refresh Rate", "Number of USB", "Internet Connectivity", 
                                                                                                        "Integrated DVD player", "Curved", "OS"
-                                                                                                       )]
+)]
