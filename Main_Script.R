@@ -8,6 +8,24 @@ price_db <- as.df(fread("M:/Technology/DATA/TV_sets_model/WW TV Price Tracker/Tr
 names(price_db) <- gsub(" ($)","_US", names(price_db), fixed = T)
 names(price_db) <- gsub(" (Local)","_Loc", names(price_db), fixed = T)
 names(price_db) <- gsub(" (LAN / RJ-45)","", names(price_db), fixed = T)
+
+price_db$Country <- toupper(price_db$Country)
+price_db$Brand <- toupper(price_db$Brand)
+
+blank_reducer <- function(col){
+  col <- gsub("  "," ", col)
+  col <- gsub("  "," ", col)
+  col <- gsub(" ","", col)
+  col[col==""] <- NA
+}
+blank_remover <- function(col){col[col==""| col==" "] <- NA}
+for (i in 1:dim(price_db)[2]){
+  price_db[,i] <- blank_reducer(price_db[,i])
+  price_db[,i] <- blank_remover(price_db[,i])
+}
+
+
+
 x <- sapply(price_db, class)
 for(i in 1:length(x)){
   if(x[i]=="integer" | x[i]=="numeric" ){
@@ -22,19 +40,7 @@ for(i in 1:length(x)){
 price_db <- column.rm(price_db, c("Size Group (5-inch)","Size Group (10-inch)")) # this is not present in every row for some reason, recalculated later
 price_db <- column.rm(price_db, "Power Consumption (Watts)") # aint nobody got time for this 
 
-price_db$Country <- toupper(price_db$Country)
-price_db$Brand <- toupper(price_db$Brand)
 
-blank_reducer <- function(col){
-  col <- gsub("  "," ", col)
-  col <- gsub("  "," ", col)
-  col <- gsub(" ","", col)
-}
-blank_remover <- function(col){col[col==""| col==" "] <- NA}
-foreach (i = 1:dim(price_db)[2]) %dopar%{
-  price_db[,i] <- blank_reducer(price_db[,i])
-  price_db[,i] <- blank_remover(price_db[,i])
-}
 
 # Brightness ---------------------------------------------------------
 price_db$Brightness[price_db$Brightness>=1000] <- NA
@@ -42,6 +48,7 @@ price_db$Brightness[price_db$Brightness==""| price_db$Brightness==" "] <- NA
 
 # Aspect Ratio ---------------------------------------------------------
 price_db$`Aspect Ratio`[price_db$`Aspect Ratio`==""| price_db$`Aspect Ratio`==" "] <- NA
+price_db$`Aspect Ratio` <- gsub("0.67291666666666661","16:9",price_db$`Aspect Ratio`, fixed = T )
 
 # Refresh Rate ---------------------------------------------------------
 price_db$`Refresh Rate` <- gsub("H", "", price_db$`Refresh Rate`, ignore.case = T)
@@ -53,12 +60,33 @@ price_db$`Refresh Rate`[price_db$`Refresh Rate`>250] <- NA # rm some ridiculous 
 price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)] <- paste0(price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)], "Hz")
 
 # Display Format ---------------------------------------------------------
-price_db$`Aspect Ratio`[price_db$`Aspect Ratio`==""| price_db$`Aspect Ratio`==" "] <- NA
+price_db$`Display Format`[price_db$`Display Format`==""| price_db$`Display Format`==" "] <- NA
+price_db$`Display Format`[!(price_db$`Display Format`=="SD" | price_db$`Display Format`=="HD" | price_db$`Display Format`=="FHD" | price_db$`Display Format`=="UHD")] <- "SD"
+
+
+# No of HDMI Connectors ---------------------------------------------------------
+price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`==""| price_db$`Number of HDMI Connectors`==" "] <- NA
+price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`=="Yes"] <- NA
+
+# CI+ Module ---------------------------------------------------------
+price_db$`CI+ module`[price_db$`CI+ module`==""| price_db$`CI+ module`==" "] <- NA
+
+# Backlight ---------------------------------------------------------
+price_db$Backlight[price_db$Backlight==""| price_db$Backlight==" "] <- NA
+price_db$Backlight[price_db$Backlight=="E-LED" | price_db$Backlight=="D-LED"] <- "LED"
+
+# Internet Features ---------------------------------------------------------
+# This is combining 3 rows into 1: Internet Connectivity, Ethernet & WiFi
+price_db$Internet[price_db$Backlight==""| price_db$Backlight==" "] <- NA
+price_db$Ethernet[price_db$Ethernet==""| price_db$Ethernet==" "] <- NA
+price_db$WiFi[price_db$WiFi==""| price_db$WiFi==" "] <- NA
+
+
 
 # Actual Cleaning
 # price_db$`Size Group (5-inch)` <- dt.double_quote_fix(price_db$`Size Group (5-inch)`)
 # price_db$`Size Group (10-inch)` <- dt.double_quote_fix(price_db$`Size Group (10-inch)` )
-price_db$`Aspect Ratio` <- gsub("0.67291666666666661","16:9",price_db$`Aspect Ratio`, fixed = T )
+
 size_cat_gen <- function(df, range){
   if(class(df$`Screen Size`)!= "numeric"){print("worng class")}else{
     col <- df$`Screen Size`
@@ -88,7 +116,7 @@ for (i in 1:length(x)){
 unique_df <- as.df(temp_df)
 names(unique_df) <- names(price_db)
 
-
+# use complete.cases to rule out rows with NAs
 
 #~~~Data Cleaning End~~~#
 
