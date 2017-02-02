@@ -182,6 +182,7 @@ price_db_2016 <- as.df(price_db_2016[, list(Price_US = mean(Price_US)), by = c(#
 
 price_db_2016$log_price <- log(price_db_2016$Price_US)
 price_db_2016_complete <- price_db_2016[complete.cases(price_db_2016),]
+
 #~~~Data Subsetting End~~~#
 
 
@@ -190,7 +191,12 @@ price_db_2016_complete <- price_db_2016[complete.cases(price_db_2016),]
 
 #~~~Regression Vis Start~~~#
 price_db_2016_complete_num <- df.class.extract(price_db_2016_complete,"numeric")
+price_db_2016_complete[is.na(price_db_2016_complete)] <- ""
 price_db_2016_complete <- df.c2f(price_db_2016_complete)
+
+price_db_2016[is.na(price_db_2016)] <- ""
+price_db_2016 <- df.c2f(price_db_2016)
+
 price_db_2016_complete_num <- column.rm(price_db_2016_complete_num, "Price_US")
 # vis 
 pairs(price_db_2016_complete_num)
@@ -215,27 +221,28 @@ cor_list <-as.df(cor_matrix[order(-abs(cor_matrix$Freq)),])    #Sort by highest 
 
 
 training <- price_db_2016 
-training[is.na(training)] <- ""
 training <- column.rm(training, c("Display"))
 fitControl <- trainControl(method = "repeatedcv",
                            repeats = 5, 
                            savePredictions = T,
                            number = 10)
-fitControl_rf <- trainControl(method = "repeatedcv",
-                           repeats = 2, 
-                           savePredictions = T,
-                           number = 5)
+
 
 pricing_glm <- train(log_price ~. -Model -`Screen Size` -Price_US, 
                       data = training,
                       method = "glm",
                       family = "gaussian",
                       trControl = fitControl)
-pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-                      data = training,
-                      method = "rf",
-                      family = "gaussian",
-                      trControl = fitControl_rf)
+
+# fitControl_rf <- trainControl(method = "repeatedcv",
+#                               repeats = 2, 
+#                               savePredictions = T,
+#                               number = 5)
+# pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, #its stupid
+#                       data = training,
+#                       method = "rf",
+#                       family = "gaussian",
+#                       trControl = fitControl_rf)
 pricing_avnnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
                       data = training,
                       method = "avNNet",
@@ -248,7 +255,7 @@ pricing_nnet <- train(log_price ~. -Model -`Screen Size` -Price_US,
                         trControl = fitControl, linout = T)
 
 results <- resamples(list(GLM = pricing_glm,
-                          RF = pricing_rf,
+                          # RF = pricing_rf,
                           avNNet = pricing_avnnet,
                           NNet = pricing_avnnet))
 #~~~Real Deal End~~~#
