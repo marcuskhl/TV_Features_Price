@@ -172,7 +172,8 @@ price_db_2016 <- as.dt(price_db_2016)
 price_db_2016 <- as.df(price_db_2016[, list(Price_US = mean(Price_US)), by = c(#"Year", 
                                                                                "Region", 
                                                                                #"Country", 
-                                                                               "Brand", "Model", "Display", "Screen Size",
+                                                                               "Brand", 
+                                                                               "Model", "Display", "Screen Size",
                                                                                                        "Size Group (5-inch)", "Aspect Ratio", "Brightness",
                                                                                                        "Display Format", "Number of HDMI Connectors", "CI+ module",
                                                                                                        "Backlight", "Refresh Rate", "Number of USB", "Internet Connectivity", 
@@ -187,18 +188,8 @@ price_db_2016_complete <- price_db_2016[complete.cases(price_db_2016),]
 
 #~~~Regression Start~~~#
 
-nums <- sapply(price_db_2016_complete, is.numeric)
-chars <- sapply(price_db_2016_complete, is.character)
-price_db_2016_complete_num <-price_db_2016_complete[ , nums]
-price_db_2016_complete[,chars] <- sapply(price_db_2016_complete[,chars], as.factor)#
-df.c2f <- function(df){
-  for(i in 1:dim(df)[2]){
-    if(class(df[,i])=="character"){
-      df[,i] <- as.factor(df[,i])
-    }
-  }
-  return(df)
-}
+#~~~Regression Vis Start~~~#
+price_db_2016_complete_num <- df.class.extract(price_db_2016_complete,"numeric")
 price_db_2016_complete <- df.c2f(price_db_2016_complete)
 price_db_2016_complete_num <- column.rm(price_db_2016_complete_num, "Price_US")
 # vis 
@@ -206,12 +197,61 @@ pairs(price_db_2016_complete_num)
 
 
 price_db_2016_complete_f2n <- price_db_2016_complete
-price_db_2016_complete_f2n <-price_db_2016_complete_f2n[ , chars]
-for(i in 1: dim(price_db_2016_complete_f2n)[2]){
-  price_db_2016_complete_f2n[,i] <- as.numeric(price_db_2016_complete_f2n[,i])
-}
+price_db_2016_complete_f2n <- lapply(price_db_2016_complete_f2n, as.numeric)
+
+
+price_db_2016_complete_f2n <- as.df(price_db_2016_complete_f2n)
 cor_matrix <- cor(price_db_2016_complete_f2n)
 corrplot(cor_matrix)
+cor_matrix[lower.tri(cor_matrix,diag=TRUE)]=NA  #Prepare to drop duplicates and meaningless information
+cor_matrix=as.data.frame(as.table(cor_matrix))  #Turn into a 3-column table
+cor_matrix=na.omit(cor_matrix)  #Get rid of the junk we flagged above
+cor_list <-as.df(cor_matrix[order(-abs(cor_matrix$Freq)),])    #Sort by highest correlation (whether +ve or -ve)
+#~~~Regression Vis End~~~#
+
+#~~~Real Deal Start~~~#
+
+#training <- price_db_2016_complete 
+
+
+training <- price_db_2016 
+training[is.na(training)] <- ""
+training <- column.rm(training, c("Display"))
+fitControl <- trainControl(method = "repeatedcv",
+                           repeats = 5, 
+                           savePredictions = T,
+                           number = 10)
+fitControl_rf <- trainControl(method = "repeatedcv",
+                           repeats = 2, 
+                           savePredictions = T,
+                           number = 5)
+
+pricing_glm <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+                      data = training,
+                      method = "glm",
+                      family = "gaussian",
+                      trControl = fitControl)
+pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+                      data = training,
+                      method = "rf",
+                      family = "gaussian",
+                      trControl = fitControl_rf)
+pricing_avnnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+                      data = training,
+                      method = "avNNet",
+                      family = "gaussian",
+                      trControl = fitControl, linout = T)
+pricing_nnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+                        data = training,
+                        method = "nnet",
+                        family = "gaussian",
+                        trControl = fitControl, linout = T)
+
+results <- resamples(list(GLM = pricing_glm,
+                          RF = pricing_rf,
+                          avNNet = pricing_avnnet,
+                          NNet = pricing_avnnet))
+#~~~Real Deal End~~~#
 #~~~Regression End~~~#
 
 
