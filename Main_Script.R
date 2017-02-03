@@ -47,6 +47,7 @@ price_db <- column.rm(price_db, "Price_Loc")
 price_db$Brightness[price_db$Brightness>=1000] <- NA
 price_db$Brightness[price_db$Brightness=="" | price_db$Brightness==" "] <- NA
 
+
 # Aspect Ratio ---------------------------------------------------------
 price_db$`Aspect Ratio`[price_db$`Aspect Ratio`=="" |  price_db$`Aspect Ratio`==" "] <- NA
 price_db$`Aspect Ratio` <- gsub("0.67291666666666661","16:9",price_db$`Aspect Ratio`, fixed = T )
@@ -129,38 +130,42 @@ price_db$OS[!grepl(paste(x, collapse = "|"), price_db$OS)] <- "Proprietary OS"
 
 # Actual Cleaning
 
-size_cat_gen <- function(df, range){
-  if(class(df$`Screen Size`)!= "numeric"){print("worng class")}else{
-    col <- df$`Screen Size`
-    lower <- floor(col/range)*range
-    upper <- ceiling(col/range)*range -1 # have error, next line is the patch
-    upper[floor(col/range)*range==ceiling(col/range)*range] <- upper[floor(col/range)*range==ceiling(col/range)*range] +range
-    new_col <- paste0(lower, "\"-", upper,  "\"")
-    new_col <- as.df(f2c(new_col))
-    names(new_col) <- paste0("Size Group (", range, "-inch)")
-    return(cbind.data.frame(df, new_col))
-  }
-}
-price_db <- size_cat_gen(price_db,5)
+# range_gen <- function(df, col_ref, range){
+#   df <- fn.is.dt.start(df)
+#   if(class(df[,match(col_ref, names(df))])!= "numeric"){print("worng class")}else{
+#     col <- df[,match(col_ref, names(df))]
+#     lower <- floor(col/range)*range
+#     upper <- ceiling(col/range)*range -1 # have error, next line is the patch
+#     upper[lower==(upper+1)] <- upper[lower==(upper+1)] +range
+#     new_col <- paste0(lower, "\"-", upper,  "\"")
+#     new_col <- as.df(f2c(new_col))
+#     names(new_col) <- paste0("Size Group (", range, "-inch)")
+#     df <- cbind.data.frame(df, new_col)
+#     return(fn.is.dt.end(df,dt_flag))
+#   }
+# }
+price_db <- BasicSettings::range_gen(price_db, "Screen Size",5)
 
+price_db$Brightness[is.na(price_db$Brightness)] <- 0
+price_db <- BasicSettings::range_gen(price_db,"Brightness", 100)
+price_db$Brightness[price_db$Brightness==0] <- NA
 
 
 # Unique Value Visualisation
 
-x <- sapply(price_db, unique)
-n <- max(sapply(x, length))
-for (i in 1:length(x)){
-  temp <- as.array(x[[i]])
-  length(temp) <- n
-  if(i==1){temp_df <- temp}
-  else{temp_df <- cbind(temp_df, temp)}
-  rm(temp)
-}
-unique_df <- as.df(temp_df)
-names(unique_df) <- names(price_db)
-
-
-
+# wrote all this for nothing! not until I try to write a function with that exact name did I realise
+# x <- sapply(price_db, unique)
+# n <- max(sapply(x, length))
+# for (i in 1:length(x)){
+#   temp <- as.array(x[[i]])
+#   length(temp) <- n
+#   if(i==1){temp_df <- temp}
+#   else{temp_df <- cbind(temp_df, temp)}
+#   rm(temp)
+# }
+# unique_df <- as.df(temp_df)
+# names(unique_df) <- names(price_db)
+unique_df <- unique.data.frame(price_db)
 
 #~~~Data Cleaning End~~~#
 
@@ -182,7 +187,6 @@ price_db_2016 <- as.df(price_db_2016[, list(Price_US = mean(Price_US)), by = c(#
 
 price_db_2016$log_price <- log(price_db_2016$Price_US)
 price_db_2016_complete <- price_db_2016[complete.cases(price_db_2016),]
-
 #~~~Data Subsetting End~~~#
 
 
@@ -221,43 +225,45 @@ cor_list <-as.df(cor_matrix[order(-abs(cor_matrix$Freq)),])    #Sort by highest 
 
 
 training <- price_db_2016 
-training <- column.rm(training, c("Display"))
-fitControl <- trainControl(method = "repeatedcv",
-                           repeats = 5, 
-                           savePredictions = T,
-                           number = 10)
+#training <- column.rm(training, c("Display"))
+# fitControl <- trainControl(method = "repeatedcv",
+#                            repeats = 5, 
+#                            savePredictions = T,
+#                            number = 10)
+# 
+# 
+# pricing_glm <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+#                       data = training,
+#                       method = "glm",
+#                       family = "gaussian",
+#                       trControl = fitControl)
 
-
-pricing_glm <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-                      data = training,
-                      method = "glm",
-                      family = "gaussian",
-                      trControl = fitControl)
+pricing_lm <- lm(log_price ~ 
+                       Region+`Size Group (5-inch)`+ Brightness + `Display Format` + `Number of HDMI Connectors` + `CI+ module` + Backlight + `Refresh Rate`
+                     + `Number of USB` + `Internet Connectivity` + `Curved` + `Integrated DVD player` +OS,
+                     training)
 
 # fitControl_rf <- trainControl(method = "repeatedcv",
 #                               repeats = 2, 
 #                               savePredictions = T,
 #                               number = 5)
-# pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, #its stupid
+# pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, #its stupid, too many factors
 #                       data = training,
 #                       method = "rf",
 #                       family = "gaussian",
 #                       trControl = fitControl_rf)
-pricing_avnnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-                      data = training,
-                      method = "avNNet",
-                      family = "gaussian",
-                      trControl = fitControl, linout = T)
-pricing_nnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-                        data = training,
-                        method = "nnet",
-                        family = "gaussian",
-                        trControl = fitControl, linout = T)
+# pricing_avnnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+#                       data = training,
+#                       method = "avNNet",
+#                       family = "gaussian",
+#                       trControl = fitControl, linout = T)
+# pricing_nnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
+#                         data = training,
+#                         method = "nnet",
+#                         family = "gaussian",
+#                         trControl = fitControl, linout = T)
 
-results <- resamples(list(GLM = pricing_glm,
-                          # RF = pricing_rf,
-                          avNNet = pricing_avnnet,
-                          NNet = pricing_avnnet))
+
 #~~~Real Deal End~~~#
 #~~~Regression End~~~#
 
