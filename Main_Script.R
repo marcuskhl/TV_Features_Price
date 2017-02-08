@@ -1,5 +1,5 @@
 if(is.na(match(c("devtools"),installed.packages()[,"Package"]))) install.packages(new.packages) else library(devtools)
-suppressMessages(devtools::install_github("marcuskhl/BasicSettings"));library(BasicSettings)
+suppressMessages(devtools::install_github("marcusihsmarkit/BasicSettings"));library(BasicSettings)
 
 price_db_raw <- as.df(fread("M:/Technology/DATA/TV_sets_model/WW TV Price Tracker/Tracker Price Model Output/Pricing_Output.csv", header = T))
 price_db <- price_db_raw # for debugging so I dont need to read the file over and over
@@ -8,6 +8,9 @@ price_db <- price_db_raw # for debugging so I dont need to read the file over an
 names(price_db) <- gsub(" ($)","_US", names(price_db), fixed = T)
 names(price_db) <- gsub(" (Local)","_Loc", names(price_db), fixed = T)
 names(price_db) <- gsub(" (LAN / RJ-45)","", names(price_db), fixed = T)
+
+
+
 
 x <- sapply(price_db, class)
 for(i in 1:length(x)){
@@ -43,6 +46,11 @@ price_db <- column.rm(price_db, "Price_Loc")
 
 
 
+# Display ---------------------------------------------------------
+price_db <- price_db[!price_db$Display=="PDP TV",] # according to wikipedia, us pdp market ended in 2014, anything we are still scraping for PDP
+# would act as noise more than information
+price_db <- price_db[!price_db$Display=="RPTV",] # old technology
+
 # Brightness ---------------------------------------------------------
 price_db$Brightness[price_db$Brightness>=1000] <- NA
 price_db$Brightness[price_db$Brightness=="" | price_db$Brightness==" "] <- NA
@@ -60,26 +68,43 @@ price_db$`Refresh Rate`[price_db$`Refresh Rate`==""|price_db$`Refresh Rate`==" "
 price_db$`Refresh Rate` <- f2n(price_db$`Refresh Rate`)
 price_db$`Refresh Rate`[price_db$`Refresh Rate`>250] <- NA # rm some ridiculous refresh rates
 price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)] <- paste0(price_db$`Refresh Rate`[!is.na(price_db$`Refresh Rate`)], "Hz")
+# I think the most important division line is > 100Hz vs < 100Hz
+# basically, u have the standard 50 and 60 Hz then you have the 100, 120 and 200 240
+# it is often argued that >120, it difference is minimal, that is why I grouped it into a new one
+price_db$`Refresh Rate Grouped` <- price_db$`Refresh Rate`
+price_db$`Refresh Rate Grouped` <- gsub("Hz", "", price_db$`Refresh Rate Grouped`)
+price_db$`Refresh Rate Grouped`[is.na(price_db$`Refresh Rate Grouped`)] <- 60 # IMPUTATION again
+price_db$`Refresh Rate Grouped` <- as.numeric(price_db$`Refresh Rate Grouped`)
+price_db$`Refresh Rate Grouped`[price_db$`Refresh Rate Grouped`>100] <- ">100Hz"
+price_db$`Refresh Rate Grouped`[!price_db$`Refresh Rate Grouped`==">100Hz"] <- "=<100Hz"
+
 
 # Display Format ---------------------------------------------------------
 price_db$`Display Format`[price_db$`Display Format`=="" |  price_db$`Display Format`==" "] <- NA
-price_db$`Display Format`[!(price_db$`Display Format`=="SD" | price_db$`Display Format`=="HD" | price_db$`Display Format`=="FHD" | price_db$`Display Format`=="UHD")] <- "SD"
-
+price_db$`Display Format`[!(price_db$`Display Format`=="SD" | price_db$`Display Format`=="HD" | price_db$`Display Format`=="FHD" | price_db$`Display Format`=="UHD")] <- "FHD" # Imputation
 
 # No of HDMI Connectors ---------------------------------------------------------
-price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`=="" |  price_db$`Number of HDMI Connectors`==" "] <- NA
-price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`=="Yes"] <- NA
+price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`=="" |  price_db$`Number of HDMI Connectors`==" "] <- 1 # imputation
+price_db$`Number of HDMI Connectors`[price_db$`Number of HDMI Connectors`=="Yes"] <- 1 # imputation
 
 # CI+ Module ---------------------------------------------------------
 price_db$`CI+ module`[price_db$`CI+ module`==" "] <- NA
 
 
 # Number of USBs ---------------------------------------------------------
-price_db$`Number of USB`[price_db$`Number of USB`==" "] <- NA
+price_db$`Number of USB`[price_db$`Number of USB`=="" | price_db$`Number of USB`==" "] <- 2 # average # of usb ports are 1.98 # this is imputation
+price_db$`Number of USB`[is.na(price_db$`Number of USB`)] <- 2
+price_db$`Number of USB Grouped`[price_db$`Number of USB`<=2] <- "0-2"
+price_db$`Number of USB Grouped`[price_db$`Number of USB`>2] <- ">=3"
 
 # Backlight ---------------------------------------------------------
 price_db$Backlight[price_db$Backlight=="" | price_db$Backlight==" "] <- NA
-price_db$Backlight[price_db$Backlight=="E-LED" | price_db$Backlight=="D-LED"] <- "LED"
+price_db$Backlight[is.na(price_db$Backlight)] <- price_db$Display[is.na(price_db$Backlight)] 
+# only a handful of each for UHP and DLP, and they are outdated technologies. CCFL - just outdated
+price_db <- price_db[!(price_db$Backlight=="UHP" | price_db$Backlight=="DLP" | price_db$Backlight=="CCFL"),] 
+price_db$Backlight[price_db$Backlight=="E-LED" | price_db$Backlight=="D-LED"] <- "LED" # E-LED wasnt significant
+
+
 
 # Internet Features ---------------------------------------------------------
 # This is combining 3 rows into 1: Internet Connectivity, Ethernet & WiFi
@@ -96,7 +121,7 @@ price_db$`Internet Connectivity`[price_db$Ethernet=="Yes"| price_db$WiFi=="Yes"]
 price_db <- column.rm(price_db, c("Ethernet", "WiFi"))
 
 # Integrated DVD Player ---------------------------------------------------------
-price_db$`Integrated DVD player`[price_db$`Integrated DVD player`=="" | price_db$`Integrated DVD player`==" "] <- NA
+price_db$`Integrated DVD player`[price_db$`Integrated DVD player`=="" | price_db$`Integrated DVD player`==" "] <- "No"# Imputation! Assume no if not specified
 price_db$`Integrated DVD player`[(!price_db$`Integrated DVD player`== "Yes") & !is.na(price_db$`Integrated DVD player`)] <- "No"
 
 # Curved ---------------------------------------------------------
@@ -126,6 +151,20 @@ x <- c("Android", "WebOS", "FireFox", "Roku TV", "Tizen", "Windows")
 price_db$OS[!grepl(paste(x, collapse = "|"), price_db$OS)] <- "Proprietary OS"
 
 
+# Brand ----------------------------------------------------------------
+price_db$Brand[grepl("orion", price_db$Brand, ignore.case = T)] <- "ORION"
+brand_list <- c("Changhong", "Haier", "Hisense", "LG", "Orion", "Panasonic", "Philips", "Samsung", "Sharp", "Skyworth", "Sony", "TCL", "Toshiba", "Vizio") # brand list to track
+# anything else will be Others
+brand_list <- toupper(brand_list)
+price_db$Brand[!price_db$Brand%in%brand_list] <- "OTHERS"
+
+#~~~Manual Research Start~~~#
+price_db$Curved[price_db$Model=="65EG9600"] <- "Yes"
+price_db$Curved[price_db$Model=="KN55S9C"] <- "Yes"
+price_db$`Number of USB Grouped`[price_db$Model=="UN60F6300"] <- ">=3"
+#~~~Manual Research End~~~#
+
+
 
 
 # Actual Cleaning
@@ -147,8 +186,10 @@ price_db$OS[!grepl(paste(x, collapse = "|"), price_db$OS)] <- "Proprietary OS"
 price_db <- BasicSettings::range_gen(price_db, "Screen Size",5)
 
 price_db$Brightness[is.na(price_db$Brightness)] <- 0
-price_db <- BasicSettings::range_gen(price_db,"Brightness", 100)
+price_db <- BasicSettings::range_gen(price_db,"Brightness", 200)
 price_db$Brightness[price_db$Brightness==0] <- NA
+price_db <- df.name.change(price_db, "Size Group (200-inch)", "Brightness Group (200-nit)") # was 100 nit but they are insig. beyond 500nit, which makes a lot of sense given how human eye works
+price_db$`Brightness Group (200-nit)` <- gsub("\"", "", price_db$`Brightness Group (200-nit)`)
 
 
 # Unique Value Visualisation
@@ -171,23 +212,49 @@ unique_df <- unique.data.frame(price_db)
 
 
 
-#~~~Data Subsetting Start~~~#
-price_db_2016 <- price_db[price_db$Year==2016, ]
-price_db_2016 <- as.dt(price_db_2016)
-price_db_2016 <- as.df(price_db_2016[, list(Price_US = mean(Price_US)), by = c(#"Year", 
-                                                                               "Region", 
-                                                                               #"Country", 
-                                                                               "Brand", 
-                                                                               "Model", "Display", "Screen Size",
-                                                                                                       "Size Group (5-inch)", "Aspect Ratio", "Brightness",
-                                                                                                       "Display Format", "Number of HDMI Connectors", "CI+ module",
-                                                                                                       "Backlight", "Refresh Rate", "Number of USB", "Internet Connectivity", 
-                                                                                                       "Integrated DVD player", "Curved", "OS"
-)])
+#~~~Data Subsetting + 2016 Cleaning Start~~~#
 
+# sorry for the confusing naming, decided to regress with more data, hence taking year into account 
+# next step would be taking only 2014 onwards, where UHD really start to boom
+# could determine it by outlier formula when we have time, but right, now, this is a straight cut from intuition
+#price_db_2016 <- price_db[price_db$Year==2016 & price_db$Country=="US", ]
+price_db_2016 <- price_db[ price_db$Country=="US", ] # in order to increase the amount of training data, I left out Year ==2016 filter
+# negative effect of taking all years into account:
+# overpredicts SD & HD price by coefficient (remember its logged) 0.1 and 0.02
+
+
+
+# there are only 6 SD entries, group them into HD
+# price_db_2016$`Display Format`[price_db_2016$`Display Format`=="SD"] <- "HD"
+
+df_process <- function(df){
+  
+  df <- as.dt(df)
+  return(as.df(df[, list(Price_US = mean(Price_US)), by = c("Year", 
+                                                                                 #"Region", 
+                                                                                 #"Country", 
+                                                                                 "Brand", 
+                                                                                 "Model", "Display", "Screen Size",
+                                                                                 "Size Group (5-inch)", 
+                                                                                 "Aspect Ratio", 
+                                                                                 "Brightness Group (200-nit)",
+                                                                                 "Display Format", 
+                                                                                 "Number of HDMI Connectors", 
+                                                                                 # "CI+ module", # this doesnt do anything
+                                                                                 "Backlight", 
+                                                                                 "Refresh Rate Grouped", 
+                                                                                 "Number of USB Grouped", 
+                                                                                 "Internet Connectivity", 
+                                                                                 "Integrated DVD player", 
+                                                                                 "Curved", 
+                                                                                 "OS"
+  )]))
+}
+
+price_db_2016 <- df_process(price_db_2016)
 price_db_2016$log_price <- log(price_db_2016$Price_US)
 price_db_2016_complete <- price_db_2016[complete.cases(price_db_2016),]
-#~~~Data Subsetting End~~~#
+#~~~Data Subsetting + 2016 Cleaning End~~~#
 
 
 
@@ -212,6 +279,7 @@ price_db_2016_complete_f2n <- lapply(price_db_2016_complete_f2n, as.numeric)
 
 price_db_2016_complete_f2n <- as.df(price_db_2016_complete_f2n)
 cor_matrix <- cor(price_db_2016_complete_f2n)
+x11()
 corrplot(cor_matrix)
 cor_matrix[lower.tri(cor_matrix,diag=TRUE)]=NA  #Prepare to drop duplicates and meaningless information
 cor_matrix=as.data.frame(as.table(cor_matrix))  #Turn into a 3-column table
@@ -223,49 +291,123 @@ cor_list <-as.df(cor_matrix[order(-abs(cor_matrix$Freq)),])    #Sort by highest 
 
 #training <- price_db_2016_complete 
 
+best_tv_regression <- function(df, no_dvd = F){
+  training <-  df
 
-training <- price_db_2016 
-#training <- column.rm(training, c("Display"))
-# fitControl <- trainControl(method = "repeatedcv",
-#                            repeats = 5, 
-#                            savePredictions = T,
-#                            number = 10)
-# 
-# 
-# pricing_glm <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-#                       data = training,
-#                       method = "glm",
-#                       family = "gaussian",
-#                       trControl = fitControl)
-
-pricing_lm <- lm(log_price ~ 
-                       Region+`Size Group (5-inch)`+ Brightness + `Display Format` + `Number of HDMI Connectors` + `CI+ module` + Backlight + `Refresh Rate`
-                     + `Number of USB` + `Internet Connectivity` + `Curved` + `Integrated DVD player` +OS,
+  if(no_dvd == F){
+    pricing_lm <- lm(log_price ~ Year+ Brand +
+                       `Size Group (5-inch)` + Display + Backlight + `Display Format` + `Number of HDMI Connectors` + `Brightness Group (200-nit)` + `Refresh Rate Grouped`
+                     + `Number of USB Grouped` + `Internet Connectivity` + `Curved` 
+                     # + `Integrated DVD player` # this doesnt do jack, having DVD player actually makes the price marginally cheaper which makes no sense
+                     +OS,
                      training)
+  }else{
+    pricing_lm <- lm(log_price ~ Year+ Brand +
+                       `Size Group (5-inch)` + Display + Backlight + `Display Format` + `Number of HDMI Connectors` + `Brightness Group (200-nit)` + `Refresh Rate Grouped`
+                     + `Number of USB Grouped` + `Internet Connectivity` + `Curved` +OS,
+                     training)
+  }
+  
+  return(pricing_lm)
+}  
+  
+#~~~Prediction Start~~~#
+price_db_2016_posh <- price_db_2016[price_db_2016$Price_US>10000,]
+price_db_2016_posh <- column.rm(price_db_2016_posh, "Integrated DVD player" ) # all no
+price_db_2016_not_posh <- price_db_2016[price_db_2016$Price_US<=10000,]
+pricing_lm_posh <- best_tv_regression(price_db_2016_posh, no_dvd = T)
+pricing_lm_not_posh <- best_tv_regression(price_db_2016_not_posh, no_dvd = F)
 
-# fitControl_rf <- trainControl(method = "repeatedcv",
-#                               repeats = 2, 
-#                               savePredictions = T,
-#                               number = 5)
-# pricing_rf <- train(log_price ~. -Model -`Screen Size` -Price_US, #its stupid, too many factors
-#                       data = training,
-#                       method = "rf",
-#                       family = "gaussian",
-#                       trControl = fitControl_rf)
-# pricing_avnnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-#                       data = training,
-#                       method = "avNNet",
-#                       family = "gaussian",
-#                       trControl = fitControl, linout = T)
-# pricing_nnet <- train(log_price ~. -Model -`Screen Size` -Price_US, 
-#                         data = training,
-#                         method = "nnet",
-#                         family = "gaussian",
-#                         trControl = fitControl, linout = T)
+post_reg_vis <- function(lm, df, title){
+  df$Modelled.Price <- exp(predict(lm, df))
+  x11()
+  plot(df$Price_US,df$Modelled.Price,main = title)
+  abline(0,1,col="red")
+  df$delta_price <- df$Modelled.Price - df$Price_US 
+  return(df)
+}
+price_db_2016_posh <- post_reg_vis(pricing_lm_posh, price_db_2016_posh, "training posh")
+price_db_2016_not_posh <- post_reg_vis(pricing_lm_not_posh, price_db_2016_not_posh, "training not posh")
 
+
+
+price_db_US_2016 <- price_db[price_db$Year==2016 & price_db$Country=="US", ]
+price_db_US_2016 <- df_process(price_db_US_2016)
+
+
+
+price_db_US_2016_not_posh <- price_db_US_2016[price_db_US_2016$Price_US<=10000,]
+price_db_US_2016_posh <- price_db_US_2016[price_db_US_2016$Price_US>10000,]
+price_db_US_2016_not_posh <- post_reg_vis(pricing_lm_not_posh, price_db_US_2016_not_posh, "prediction not posh")
+price_db_US_2016_posh <- post_reg_vis(pricing_lm_posh, price_db_US_2016_posh, "prediction posh")
+
+US_2016_pricing <- rbind.data.frame(price_db_US_2016_posh, price_db_US_2016_not_posh)
+
+
+coeff_list <- as.df(pricing_lm_not_posh$coefficients)
+coeff_list$coeff.name <- row.names(coeff_list)
+coeff_list <- coeff_list[order(-abs(coeff_list$dt)),] # this tells us the most important factors
+#~~~Prediction End~~~#
 
 #~~~Real Deal End~~~#
 #~~~Regression End~~~#
+
+
+
+#~~~Output Start~~~#
+brand_list <- as.df(brand_list)
+names(brand_list) <- "Brand"
+
+df.unique <- fn.piper(as.df, unique)
+
+display <- df.unique(US_2016_pricing$Display)
+names(display) <- "Display"
+
+big_table <- brand_list[rep(row.names(brand_list),dim(display)[1] ),]
+big_table <- cbind.data.frame(big_table,display)
+
+# screen_size_group <- df.unique(US_2016_pricing$`Size Group (5-inch)`)
+# names(screen_size_group) <- "Size Group (5-inch)"
+# 
+# big_table <- big_table[rep(row.names(big_table),dim(screen_size_group)[1] ),]
+# big_table <- cbind.data.frame(big_table,screen_size_group)
+# 
+# aspect_ratio <- df.unique(US_2016_pricing$`Aspect Ratio`)
+# names(aspect_ratio) <- "Aspect Ratio"
+# 
+# big_table <- big_table[rep(row.names(big_table),dim(aspect_ratio)[1] ),]
+# big_table <- cbind.data.frame(big_table,aspect_ratio)
+# 
+# backlight <- df.unique(US_2016_pricing$Backlight)
+# names(backlight) <- "Backlight"
+# 
+# big_table <- big_table[rep(row.names(big_table),dim(backlight)[1] ),]
+# big_table <- cbind.data.frame(big_table,backlight)
+
+
+col_list <- c("Size Group (5-inch)", "Aspect Ratio", "Backlight", "Display Format", "Number of HDMI Connectors", "Brightness Group (200-nit)",
+  "Refresh Rate Grouped", "Number of USB Grouped", "Internet Connectivity", "Curved", "OS")
+for (i in 1:3){
+  temp <- df.unique(US_2016_pricing[,match(col_list[i],names(US_2016_pricing))])
+  names(temp) <- col_list[i]
+  big_table <- big_table[rep(row.names(big_table),dim(temp)[1] ),]
+  big_table <- cbind.data.frame(big_table,temp)
+  
+}
+#~~~Output End~~~#
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
